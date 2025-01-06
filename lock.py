@@ -3,6 +3,19 @@ import json
 import argparse
 from cryptography.fernet import Fernet
 from datetime import datetime, timedelta
+import ntplib
+
+# Function to fetch time from an NTP server
+def get_ntp_time() -> datetime:
+    """Fetch the current time from an NTP server and convert it to Indian Standard Time (IST)."""
+    client = ntplib.NTPClient()
+    response = client.request('pool.ntp.org')  # You can change the server if needed
+    utc_time = datetime.utcfromtimestamp(response.tx_time)
+    
+    # IST is UTC + 5 hours 30 minutes
+    ist_time = utc_time + timedelta(hours=5, minutes=30)
+    
+    return ist_time
 
 def generate_key() -> bytes:
     """Generate and return an encryption key."""
@@ -58,8 +71,9 @@ def lock_file(file_path: str, lock_duration: int) -> None:
     with open("file_key.key", "wb") as key_file:
         key_file.write(key)
 
-    # Calculate unlock time based on current time + lock_duration
-    unlock_time = datetime.utcnow() + timedelta(seconds=lock_duration)
+    # Fetch NTP time and calculate unlock time based on it
+    current_time = get_ntp_time()
+    unlock_time = current_time + timedelta(seconds=lock_duration)
     unlock_time_str = unlock_time.isoformat()
 
     # Create metadata
@@ -82,7 +96,9 @@ def unlock_file(file_path: str) -> None:
         return
 
     unlock_time = datetime.fromisoformat(metadata["unlock_time"])
-    current_time = datetime.utcnow()
+
+    # Fetch NTP time for current time
+    current_time = get_ntp_time()
 
     if current_time < unlock_time:
         print(f"File is still locked. It will unlock at {unlock_time} UTC. Current time: {current_time} UTC.")
